@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const URL_SERVER = 'https://webngochadn.onrender.com/api'
+const URL_SERVER = 'https://webngochadn.onrender.com'
 
 function App() {
   const [token, setToken] = useState(() => {
