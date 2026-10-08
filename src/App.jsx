@@ -190,7 +190,7 @@ function App() {
       setDanhSachLoi([])
       return true
     } catch {
-      return true // Nếu lỗi mạng vẫn cho phép thử lưu
+      return true
     }
   }
 
@@ -275,7 +275,6 @@ function App() {
   const luuUocMo = async () => {
     if (!noiDung.trim()) return setThongBao('Nhập nội dung nhé! 💫')
     
-    // Kiểm tra trước khi gửi
     const hopLe = await kiemTraDuLieu()
     if (!hopLe) return
     
@@ -368,7 +367,6 @@ function App() {
     } catch { setThongBao('Lỗi xuất CSV! 😅') }
   }
 
-  // Tính toán hiệu suất
   const tongTien = useMemo(() => 
     danhSachGoc.reduce((t, i) => t + (Number(i.mucTien) || 0), 0),
     [danhSachGoc]
@@ -383,7 +381,6 @@ function App() {
   )
   const phanTram = tongTien > 0 ? Math.round((tongTienHT / tongTien) * 100) : 0
 
-  // Màu chủ đề
   const chuDeMau = {
     tim: { nen: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', nut: '#667eea' },
     xanh: { nen: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', nut: '#11998e' },
@@ -468,14 +465,12 @@ function App() {
               </button>
             </div>
 
-            {/* Thông báo sắp đến hạn */}
             {thongKe && thongKe.sapDenHan > 0 && boLoc === 'tat-ca' && !tuKhoaTim && (
               <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:'10px',padding:'0.8rem',marginBottom:'1rem',color:'#856404'}}>
                 ⏰ <strong>{thongKe.sapDenHan}</strong> ước mơ sắp đến hạn trong tuần này!
               </div>
             )}
 
-            {/* Gợi ý thông minh */}
             {boLoc === 'tat-ca' && !dangSua && !tuKhoaTim && goiY.length > 0 && (
               <div style={{background:'rgba(255,255,255,0.15)',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>
                 <p style={{color:'white',margin:'0 0 0.5rem 0',fontWeight:'bold'}}>💡 Gợi ý cho bạn:</p>
@@ -488,14 +483,12 @@ function App() {
               </div>
             )}
 
-            {/* ⚠️ Thông báo lỗi kiểm tra dữ liệu */}
             {danhSachLoi.length > 0 && (
               <div style={{background:'#fff5f5',border:'1px solid #feb2b2',borderRadius:'10px',padding:'0.8rem',marginBottom:'1rem',color:'#c53030'}}>
                 {danhSachLoi.map((l,i)=>(<p key={i} style={{margin:'0.2rem 0'}}>⚠️ {l}</p>))}
               </div>
             )}
 
-            {/* Form Thêm / Sửa */}
             <div style={{background:'white',borderRadius:'16px',padding:'1.3rem',marginBottom:'1.3rem',boxShadow:'0 10px 30px rgba(0,0,0,0.15)'}}>
               <h3 style={{marginTop:0,color:'#4a5568',fontSize:'1rem'}}>
                 {dangSua ? '✏️ Chỉnh sửa ước mơ' : 'Thêm ước mơ mới 💫'}
@@ -521,7 +514,6 @@ function App() {
               </div>
             </div>
 
-            {/* Thống kê nhỏ */}
             <div style={{background:'white',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>
               <div style={{display:'flex',justifyContent:'space-around',flexWrap:'wrap',gap:'0.5rem'}}>
                 <div style={{textAlign:'center'}}><p style={{margin:0,color:'#718096',fontSize:'0.8rem'}}>Tổng giá trị</p><p style={{fontSize:'1.2rem',fontWeight:'bold',color:'#667eea'}}>{tongTien.toLocaleString('vi-VN')} ₫</p></div>
@@ -531,13 +523,11 @@ function App() {
               <div style={{height:'8px',background:'#e2e8f0',borderRadius:'4px',marginTop:'0.8rem',overflow:'hidden'}}><div style={{height:'100%',width:`${phanTram}%`,background:'linear-gradient(90deg,#48bb78,#38a169)',borderRadius:'4px',transition:'width 0.5s ease'}} /></div>
             </div>
 
-            {/* Nút xuất dữ liệu */}
             <div style={{display:'flex',gap:'0.5rem',marginBottom:'1rem'}}>
               <button onClick={xuatDuLieu} style={{flex:1,padding:'0.8rem',background:'white',color:'#4a5568',border:'none',borderRadius:'10px',fontWeight:'bold',cursor:'pointer'}}>📤 Xuất JSON</button>
               <button onClick={xuatCSV} style={{flex:1,padding:'0.8rem',background:'white',color:'#4a5568',border:'none',borderRadius:'10px',fontWeight:'bold',cursor:'pointer'}}>📊 Xuất CSV/Excel</button>
             </div>
 
-            {/* Danh sách */}
             <div>
               {danhSachHienThi.length===0?(
                 <p style={{textAlign:'center',color:'white',fontSize:'1rem'}}>
@@ -556,4 +546,86 @@ function App() {
                           {u.ngayHen?`Đến hạn: ${new Date(u.ngayHen).toLocaleDateString('vi-VN')}`:`Tạo: ${new Date(u.ngayTao).toLocaleDateString('vi-VN')}`}
                         </p>
                       </div>
-                      <div style={{display:'flex',gap:'0.3rem',marginLeft:'0.5rem'}}></div>
+                      <div style={{display:'flex',gap:'0.3rem',marginLeft:'0.5rem'}}>
+                        <button onClick={()=>danhDauHoanThanh(u._id,!u.hoanThanh)} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1rem'}} title={u.hoanThanh?'Mở lại':'Đánh dấu xong'}>{u.hoanThanh?'↩️':'✅'}</button>
+                        <button onClick={()=>batDauSua(u)} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1rem'}} title="Sửa">✏️</button>
+                        <button onClick={()=>xoaUocMo(u._id)} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1rem'}} title="Xóa">🗑️</button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+
+        {/* === Tab: Thống kê === */}
+        {tabHienTai === 'thong-ke' && (
+          <div style={{background:'white',borderRadius:'16px',padding:'1.5rem'}}>
+            <h2 style={{textAlign:'center',color:'#4a5568',marginTop:0}}>📊 Thống kê Tổng quan</h2>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'1rem',margin:'1.5rem 0'}}>
+              <div style={{textAlign:'center',padding:'1rem',background:'#f7fafc',borderRadius:'12px'}}>
+                <p style={{margin:0,color:'#718096'}}>Tổng ước mơ</p>
+                <p style={{fontSize:'1.5rem',fontWeight:'bold',color:'#667eea'}}>{danhSachGoc.length}</p>
+              </div>
+              <div style={{textAlign:'center',padding:'1rem',background:'#f0fff4',borderRadius:'12px'}}>
+                <p style={{margin:0,color:'#718096'}}>Đã hoàn thành</p>
+                <p style={{fontSize:'1.5rem',fontWeight:'bold',color:'#48bb78'}}>{daHoanThanh}</p>
+              </div>
+              <div style={{textAlign:'center',padding:'1rem',background:'#fffaf0',borderRadius:'12px'}}>
+                <p style={{margin:0,color:'#718096'}}>Tổng giá trị</p>
+                <p style={{fontSize:'1.2rem',fontWeight:'bold',color:'#ed8936'}}>{tongTien.toLocaleString('vi-VN')} ₫</p>
+              </div>
+              <div style={{textAlign:'center',padding:'1rem',background:'#ebf8ff',borderRadius:'12px'}}>
+                <p style={{margin:0,color:'#718096'}}>Đạt được</p>
+                <p style={{fontSize:'1.2rem',fontWeight:'bold',color:'#3182ce'}}>{tongTienHT.toLocaleString('vi-VN')} ₫</p>
+              </div>
+            </div>
+            <div style={{margin:'1.5rem 0'}}>
+              <p style={{textAlign:'center',fontWeight:'bold',color:'#4a5568'}}>Tiến độ tổng thể: {phanTram}%</p>
+              <div style={{height:'20px',background:'#e2e8f0',borderRadius:'10px',overflow:'hidden',marginTop:'0.5rem'}}>
+                <div style={{height:'100%',width:`${phanTram}%`,background:'linear-gradient(90deg,#48bb78,#38a169)',borderRadius:'10px',transition:'width 0.5s ease'}} />
+              </div>
+            </div>
+            {thongKe && (
+              <div style={{marginTop:'1rem',paddingTop:'1rem',borderTop:'1px solid #e2e8f0'}}>
+                <p style={{color:'#4a5568'}}>📅 Sắp đến hạn: <strong>{thongKe.sapDenHan || 0}</strong></p>
+                <p style={{color:'#4a5568'}}>⭐ Ưu tiên cao: <strong>{thongKe.uuTienCao || 0}</strong></p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* === Tab: Lịch sử === */}
+        {tabHienTai === 'lich-su' && (
+          <div style={{background:'white',borderRadius:'16px',padding:'1.5rem'}}>
+            <h2 style={{textAlign:'center',color:'#4a5568',marginTop:0}}>🕐 Lịch sử hoạt động</h2>
+            {lichSu.length === 0 ? (
+              <p style={{textAlign:'center',color:'#718096',padding:'2rem'}}>Chưa có hoạt động nào. Bắt đầu thêm ước mơ nhé! ✨</p>
+            ) : (
+              lichSu.map((ls,i)=>(
+                <div key={i} style={{padding:'0.8rem 0',borderBottom:'1px solid #e2e8f0'}}>
+                  <p style={{margin:0,color:'#2d3748'}}>{ls.hanhDong}</p>
+                  <p style={{margin:'0.2rem 0 0 0',fontSize:'0.8rem',color:'#a0aec0'}}>{new Date(ls.ngayTao).toLocaleString('vi-VN')}</p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* === Tab: Hướng dẫn === */}
+        {tabHienTai === 'huong-dan' && (
+          <div style={{background:'white',borderRadius:'16px',padding:'1.5rem'}}>
+            <h2 style={{textAlign:'center',color:'#4a5568',marginTop:0}}>📖 Hướng dẫn sử dụng</h2>
+            <ul style={{color:'#4a5568',lineHeight:'1.8rem',paddingLeft:'1rem'}}>
+              <li>💡 Nhấn <strong>"Gợi ý khác"</strong> để có thêm ý tưởng mới</li>
+              <li>🔍 Gõ chữ ô tìm kiếm để lọc nhanh danh sách</li>
+              <li>📊 Tab Thống kê xem tổng quan tiến độ</li>
+              <li>📤 Xuất dữ liệu ra JSON/CSV để lưu trữ hoặc mở trong Excel</li>
+              <li>🎨 Nhấn các vòng tròn màu trên cùng để đổi giao diện</li>
+              <li>📋 Nhấn <strong>Chia sẻ</strong> để gửi tiến độ cho người thân</li>
+              <li>✏️ Nhấn vào nội dung bất kỳ để chỉnh sửa</li>
+              <li>☁️ Dữ liệu tự động đồng bộ trên mọi thiết bị</li>
+            </ul>
+            <p style={{textAlign:'center',marginTop:'2rem',color:'#667eea',fontWeight:'bold'}}>
+              💻 Xây dựng trên máy i3 + 4GB RAM — chứng minh đam mê không cần máy mạnh!
