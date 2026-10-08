@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
 const URL_SERVER = 'https://so-uoc-mo-server.onrender.com/api' // ✅ Đổi link của bạn!
 
@@ -18,11 +18,12 @@ function App() {
   const [tenDN, setTenDN] = useState('')
   const [matKhau, setMatKhau] = useState('')
   const [thongBao, setThongBao] = useState('')
-  const [danhSach, setDanhSach] = useState([])
+  const [danhSachGoc, setDanhSachGoc] = useState([])
+  const [danhSachHienThi, setDanhSachHienThi] = useState([])
   const [goiY, setGoiY] = useState([])
   const [thongKe, setThongKe] = useState(null)
   const [lichSu, setLichSu] = useState([])
-  const [dangSua, setDangSua] = useState(null) // id đang sửa
+  const [dangSua, setDangSua] = useState(null)
   const [noiDung, setNoiDung] = useState('')
   const [mucTien, setMucTien] = useState('')
   const [ghiChu, setGhiChu] = useState('')
@@ -30,21 +31,80 @@ function App() {
   const [doUuTien, setDoUuTien] = useState('binh')
   const [dangTai, setDangTai] = useState(false)
   const [boLoc, setBoLoc] = useState('tat-ca')
+  const [tuKhoaTim, setTuKhoaTim] = useState('')
+  const [tieuChiSapXep, setTieuChiSapXep] = useState('ngayTao')
+  const [thuTuSapXep, setThuTuSapXep] = useState('giam')
   const [daSanSang, setDaSanSang] = useState(false)
   const [tabHienTai, setTabHienTai] = useState('danh-sach')
+  const [danhSachLoi, setDanhSachLoi] = useState([])
 
   useEffect(() => { setDaSanSang(true) }, [])
+
+  // === 📋 LỌC & SẮP XẾP DỮ LIỆU HIỂN THỊ ===
+  useEffect(() => {
+    if (!Array.isArray(danhSachGoc)) return
+    
+    let ketQua = [...danhSachGoc]
+    
+    // Lọc theo từ khóa
+    if (tuKhoaTim.trim()) {
+      const tu = tuKhoaTim.toLowerCase()
+      ketQua = ketQua.filter(u =>
+        u.noiDung?.toLowerCase().includes(tu) ||
+        u.ghiChu?.toLowerCase().includes(tu)
+      )
+    }
+    
+    // Lọc theo trạng thái
+    if (boLoc === 'da-hoan-thanh') {
+      ketQua = ketQua.filter(u => u.hoanThanh)
+    } else if (boLoc === 'chua-hoan-thanh') {
+      ketQua = ketQua.filter(u => !u.hoanThanh)
+    } else if (boLoc === 'cao-uu-tien') {
+      ketQua = ketQua.filter(u => u.doUuTien === 'cao')
+    } else if (boLoc === 'sap-den-han') {
+      const hienTai = new Date()
+      const tuanSau = new Date(hienTai.getTime() + 7 * 24 * 60 * 60 * 1000)
+      ketQua = ketQua.filter(u => {
+        if (!u.ngayHen || u.hoanThanh) return false
+        const ngay = new Date(u.ngayHen)
+        return ngay >= hienTai && ngay <= tuanSau
+      })
+    }
+    
+    // Sắp xếp
+    ketQua.sort((a, b) => {
+      let giaTriA, giaTriB
+      if (tieuChiSapXep === 'mucTien') {
+        giaTriA = Number(a.mucTien) || 0
+        giaTriB = Number(b.mucTien) || 0
+      } else if (tieuChiSapXep === 'doUuTien') {
+        const cap = { thap: 1, binh: 2, cao: 3 }
+        giaTriA = cap[a.doUuTien] || 2
+        giaTriB = cap[b.doUuTien] || 2
+      } else {
+        giaTriA = new Date(a.ngayTao || 0)
+        giaTriB = new Date(b.ngayTao || 0)
+      }
+      
+      if (giaTriA < giaTriB) return thuTuSapXep === 'tang' ? -1 : 1
+      if (giaTriA > giaTriB) return thuTuSapXep === 'tang' ? 1 : -1
+      return 0
+    })
+    
+    setDanhSachHienThi(ketQua)
+  }, [danhSachGoc, boLoc, tuKhoaTim, tieuChiSapXep, thuTuSapXep])
 
   const taiLaiTatCa = useCallback(async () => {
     if (!token) return
     await Promise.all([layDanhSach(), layThongKe(), layGoiY(), layLichSu()])
     setLanCapNhatCuoi(Date.now())
-  }, [token, boLoc])
+    setDanhSachLoi([])
+  }, [token])
 
   useEffect(() => {
     if (token && daSanSang) {
       taiLaiTatCa()
-      // 🔔 Tự kiểm tra thay đổi mỗi 30 giây
       const kiemTra = setInterval(async () => {
         try {
           const phanHoi = await fetch(`${URL_SERVER}/kiem-tra-thay-doi?lanCuoi=${lanCapNhatCuoi}`, {
@@ -59,7 +119,7 @@ function App() {
       }, 30000)
       return () => clearInterval(kiemTra)
     }
-  }, [token, daSanSang, boLoc, lanCapNhatCuoi, taiLaiTatCa])
+  }, [token, daSanSang, lanCapNhatCuoi, taiLaiTatCa])
 
   useEffect(() => {
     try { localStorage.setItem('chuDe', chuDe) } catch {}
@@ -68,13 +128,13 @@ function App() {
   const layDanhSach = async () => {
     if (!token) return
     try {
-      const duongDan = boLoc === 'tat-ca' ? 'uoc-mo' : `uoc-mo/filter/${boLoc}`
-      const phanHoi = await fetch(`${URL_SERVER}/${duongDan}`, {
+      const phanHoi = await fetch(`${URL_SERVER}/uoc-mo`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       const duLieu = await phanHoi.json()
-      if (Array.isArray(duLieu)) setDanhSach(duLieu)
-      else {
+      if (Array.isArray(duLieu)) {
+        setDanhSachGoc(duLieu)
+      } else {
         setToken(null)
         localStorage.removeItem('token')
         localStorage.removeItem('tenDangNhap')
@@ -115,6 +175,25 @@ function App() {
     } catch {}
   }
 
+  const kiemTraDuLieu = async () => {
+    try {
+      const phanHoi = await fetch(`${URL_SERVER}/kiem-tra-dulieu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ noiDung, mucTien: Number(mucTien) || 0, ngayHen })
+      })
+      const kq = await phanHoi.json()
+      if (!kq.hopLe) {
+        setDanhSachLoi(kq.loi || ['Dữ liệu không hợp lệ!'])
+        return false
+      }
+      setDanhSachLoi([])
+      return true
+    } catch {
+      return true // Nếu lỗi mạng vẫn cho phép thử lưu
+    }
+  }
+
   const xuLyDangNhap = async () => {
     if (!tenDN.trim() || matKhau.length < 6) {
       return setThongBao('Tên ≥ 3 ký tự, mật khẩu ≥ 6 ký tự! ✍️')
@@ -150,7 +229,7 @@ function App() {
   }
 
   const dangXuat = () => {
-    setToken(null); setTenDangNhap(''); setDanhSach([]); setThongKe(null); setLichSu([])
+    setToken(null); setTenDangNhap(''); setDanhSachGoc([]); setThongKe(null); setLichSu([])
     try { localStorage.removeItem('token'); localStorage.removeItem('tenDangNhap') } catch {}
     setThongBao('Tạm biệt! Hẹn gặp lại 👋')
   }
@@ -167,12 +246,13 @@ function App() {
   }
 
   const themTuGoiY = (g) => {
-    setDangSua(null) // Thoát chế độ sửa
+    setDangSua(null)
     setNoiDung(g.noiDung)
     setMucTien(g.mucTien?.toString() || '')
     setGhiChu(g.ghiChu || '')
     setNgayHen('')
     setDoUuTien('binh')
+    setDanhSachLoi([])
   }
 
   const batDauSua = (u) => {
@@ -183,27 +263,32 @@ function App() {
     setNgayHen(u.ngayHen ? new Date(u.ngayHen).toISOString().split('T')[0] : '')
     setDoUuTien(u.doUuTien || 'binh')
     setTabHienTai('danh-sach')
+    setDanhSachLoi([])
   }
 
   const huySua = () => {
     setDangSua(null)
     setNoiDung(''); setMucTien(''); setGhiChu(''); setNgayHen(''); setDoUuTien('binh')
+    setDanhSachLoi([])
   }
 
   const luuUocMo = async () => {
     if (!noiDung.trim()) return setThongBao('Nhập nội dung nhé! 💫')
+    
+    // Kiểm tra trước khi gửi
+    const hopLe = await kiemTraDuLieu()
+    if (!hopLe) return
+    
     setDangTai(true)
     try {
       let phanHoi
       if (dangSua) {
-        // ✏️ Cập nhật
         phanHoi = await fetch(`${URL_SERVER}/uoc-mo/${dangSua}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ noiDung, mucTien: Number(mucTien) || 0, ghiChu, ngayHen, doUuTien })
         })
       } else {
-        // ➕ Thêm mới
         phanHoi = await fetch(`${URL_SERVER}/uoc-mo`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -263,14 +348,39 @@ function App() {
       a.download = `so-uoc-mo-${new Date().toISOString().slice(0,10)}.json`
       a.click()
       URL.revokeObjectURL(url)
-      setThongBao('📤 Đã tải dữ liệu về máy! ✅')
+      setThongBao('📤 Đã tải JSON về máy! ✅')
     } catch { setThongBao('Lỗi xuất dữ liệu! 😅') }
   }
 
-  // Tính toán
-  const tongTien = Array.isArray(danhSach) ? danhSach.reduce((t, i) => t + (Number(i.mucTien) || 0), 0) : 0
-  const daHoanThanh = Array.isArray(danhSach) ? danhSach.filter(i => i.hoanThanh).length : 0
-  const tongTienHT = Array.isArray(danhSach) ? danhSach.filter(i => i.hoanThanh).reduce((t, i) => t + (Number(i.mucTien) || 0), 0) : 0
+  const xuatCSV = async () => {
+    try {
+      const phanHoi = await fetch(`${URL_SERVER}/xuat-csv`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const blob = await phanHoi.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `so-uoc-mo-${new Date().toISOString().slice(0,10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      setThongBao('📊 Đã tải CSV — mở trong Excel được ngay! ✅')
+    } catch { setThongBao('Lỗi xuất CSV! 😅') }
+  }
+
+  // Tính toán hiệu suất
+  const tongTien = useMemo(() => 
+    danhSachGoc.reduce((t, i) => t + (Number(i.mucTien) || 0), 0),
+    [danhSachGoc]
+  )
+  const daHoanThanh = useMemo(() => 
+    danhSachGoc.filter(i => i.hoanThanh).length,
+    [danhSachGoc]
+  )
+  const tongTienHT = useMemo(() => 
+    danhSachGoc.filter(i => i.hoanThanh).reduce((t, i) => t + (Number(i.mucTien) || 0), 0),
+    [danhSachGoc]
+  )
   const phanTram = tongTien > 0 ? Math.round((tongTienHT / tongTien) * 100) : 0
 
   // Màu chủ đề
@@ -329,22 +439,44 @@ function App() {
         {/* === Tab: Danh sách === */}
         {tabHienTai === 'danh-sach' && (
           <>
+            {/* 🔍 Tìm kiếm */}
+            <div style={{marginBottom:'1rem'}}>
+              <input 
+                type="text" 
+                placeholder="🔍 Tìm kiếm theo nội dung, ghi chú..." 
+                value={tuKhoaTim} 
+                onChange={(e)=>setTuKhoaTim(e.target.value)} 
+                style={{width:'100%',padding:'0.8rem',borderRadius:'10px',border:'none',fontSize:'0.95rem'}} 
+              />
+            </div>
+
             {/* Bộ lọc */}
             <div style={{display:'flex',gap:'0.4rem',marginBottom:'1rem',flexWrap:'wrap'}}>
-              {[{k:'tat-ca',t:'Tất cả'},{k:'sap-den-han',t:'🔔 Sắp đến hạn'},{k:'cao-uu-tien',t:'⭐ Ưu tiên cao'},{k:'da-hoan-thanh',t:'✅ Đã xong'}].map(b=>(
+              {[{k:'tat-ca',t:'Tất cả'},{k:'chua-hoan-thanh',t:'⏳ Chưa xong'},{k:'da-hoan-thanh',t:'✅ Đã xong'},{k:'cao-uu-tien',t:'⭐ Ưu tiên cao'},{k:'sap-den-han',t:'🔔 Sắp đến hạn'}].map(b=>(
                 <button key={b.k} onClick={()=>setBoLoc(b.k)} style={{padding:'0.5rem 0.9rem',border:'none',borderRadius:'20px',background:boLoc===b.k?'white':'rgba(255,255,255,0.2)',color:boLoc===b.k?chuDeMau.nut:'white',cursor:'pointer',fontSize:'0.85rem',fontWeight:boLoc===b.k?'bold':'normal'}}>{b.t}</button>
               ))}
             </div>
 
+            {/* 📅 Sắp xếp */}
+            <div style={{display:'flex',gap:'0.5rem',marginBottom:'1rem',alignItems:'center',flexWrap:'wrap'}}>
+              <span style={{color:'white',fontSize:'0.85rem'}}>Sắp xếp:</span>
+              {[{k:'ngayTao',t:'Ngày tạo'},{k:'mucTien',t:'Số tiền'},{k:'doUuTien',t:'Độ ưu tiên'}].map(s=>(
+                <button key={s.k} onClick={()=>setTieuChiSapXep(s.k)} style={{padding:'0.4rem 0.7rem',border:'none',borderRadius:'15px',background:tieuChiSapXep===s.k?'white':'rgba(255,255,255,0.2)',color:tieuChiSapXep===s.k?chuDeMau.nut:'white',cursor:'pointer',fontSize:'0.8rem'}}>{s.t}</button>
+              ))}
+              <button onClick={()=>setThuTuSapXep(thuTuSapXep==='tang'?'giam':'tang')} style={{padding:'0.4rem 0.7rem',border:'none',borderRadius:'15px',background:'rgba(255,255,255,0.2)',color:'white',cursor:'pointer',fontSize:'0.8rem'}}>
+                {thuTuSapXep==='tang'?'⬆️ Tăng':'⬇️ Giảm'}
+              </button>
+            </div>
+
             {/* Thông báo sắp đến hạn */}
-            {thongKe && thongKe.sapDenHan > 0 && (
+            {thongKe && thongKe.sapDenHan > 0 && boLoc === 'tat-ca' && !tuKhoaTim && (
               <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:'10px',padding:'0.8rem',marginBottom:'1rem',color:'#856404'}}>
                 ⏰ <strong>{thongKe.sapDenHan}</strong> ước mơ sắp đến hạn trong tuần này!
               </div>
             )}
 
             {/* Gợi ý thông minh */}
-            {boLoc === 'tat-ca' && !dangSua && goiY.length > 0 && (
+            {boLoc === 'tat-ca' && !dangSua && !tuKhoaTim && goiY.length > 0 && (
               <div style={{background:'rgba(255,255,255,0.15)',borderRadius:'12px',padding:'1rem',marginBottom:'1rem'}}>
                 <p style={{color:'white',margin:'0 0 0.5rem 0',fontWeight:'bold'}}>💡 Gợi ý cho bạn:</p>
                 {goiY.map((g,i)=>(
@@ -356,16 +488,23 @@ function App() {
               </div>
             )}
 
+            {/* ⚠️ Thông báo lỗi kiểm tra dữ liệu */}
+            {danhSachLoi.length > 0 && (
+              <div style={{background:'#fff5f5',border:'1px solid #feb2b2',borderRadius:'10px',padding:'0.8rem',marginBottom:'1rem',color:'#c53030'}}>
+                {danhSachLoi.map((l,i)=>(<p key={i} style={{margin:'0.2rem 0'}}>⚠️ {l}</p>))}
+              </div>
+            )}
+
             {/* Form Thêm / Sửa */}
             <div style={{background:'white',borderRadius:'16px',padding:'1.3rem',marginBottom:'1.3rem',boxShadow:'0 10px 30px rgba(0,0,0,0.15)'}}>
               <h3 style={{marginTop:0,color:'#4a5568',fontSize:'1rem'}}>
                 {dangSua ? '✏️ Chỉnh sửa ước mơ' : 'Thêm ước mơ mới 💫'}
               </h3>
-              <input type="text" placeholder="Bạn muốn điều gì?" value={noiDung} onChange={(e)=>setNoiDung(e.target.value)} style={{width:'100%',padding:'0.7rem',margin:'0.4rem 0',borderRadius:'8px',border:'2px solid #e2e8f0'}} />
+              <input type="text" placeholder="Bạn muốn điều gì? (3-200 ký tự)" value={noiDung} onChange={(e)=>setNoiDung(e.target.value)} style={{width:'100%',padding:'0.7rem',margin:'0.4rem 0',borderRadius:'8px',border:danhSachLoi.some(l=>l.includes('Nội dung'))?'2px solid #fc8181':'2px solid #e2e8f0'}} />
               <input type="number" placeholder="Cần bao nhiêu tiền?" value={mucTien} onChange={(e)=>setMucTien(e.target.value)} style={{width:'100%',padding:'0.7rem',margin:'0.4rem 0',borderRadius:'8px',border:'2px solid #e2e8f0'}} />
               <input type="text" placeholder="Ghi chú (tùy chọn)" value={ghiChu} onChange={(e)=>setGhiChu(e.target.value)} style={{width:'100%',padding:'0.7rem',margin:'0.4rem 0',borderRadius:'8px',border:'2px solid #e2e8f0'}} />
               <div style={{display:'flex',gap:'0.5rem',margin:'0.4rem 0',flexWrap:'wrap'}}>
-                <input type="date" value={ngayHen} onChange={(e)=>setNgayHen(e.target.value)} style={{flex:1,minWidth:'140px',padding:'0.7rem',borderRadius:'8px',border:'2px solid #e2e8f0'}} />
+                <input type="date" value={ngayHen} onChange={(e)=>setNgayHen(e.target.value)} style={{flex:1,minWidth:'140px',padding:'0.7rem',borderRadius:'8px',border:danhSachLoi.some(l=>l.includes('Ngày'))?'2px solid #fc8181':'2px solid #e2e8f0'}} />
                 <select value={doUuTien} onChange={(e)=>setDoUuTien(e.target.value)} style={{flex:1,minWidth:'140px',padding:'0.7rem',borderRadius:'8px',border:'2px solid #e2e8f0'}}>
                   <option value="thap">🔵 Thấp</option>
                   <option value="binh">🟢 Bình thường</option>
@@ -387,17 +526,25 @@ function App() {
               <div style={{display:'flex',justifyContent:'space-around',flexWrap:'wrap',gap:'0.5rem'}}>
                 <div style={{textAlign:'center'}}><p style={{margin:0,color:'#718096',fontSize:'0.8rem'}}>Tổng giá trị</p><p style={{fontSize:'1.2rem',fontWeight:'bold',color:'#667eea'}}>{tongTien.toLocaleString('vi-VN')} ₫</p></div>
                 <div style={{textAlign:'center'}}><p style={{margin:0,color:'#718096',fontSize:'0.8rem'}}>Đã hoàn thành</p><p style={{fontSize:'1.2rem',fontWeight:'bold',color:'#48bb78'}}>{phanTram}%</p></div>
-                <div style={{textAlign:'center'}}><p style={{margin:0,color:'#718096',fontSize:'0.8rem'}}>Số ước mơ</p><p style={{fontSize:'1.2rem',fontWeight:'bold',color:'#f6ad55'}}>{daHoanThanh}/{danhSach.length}</p></div>
+                <div style={{textAlign:'center'}}><p style={{margin:0,color:'#718096',fontSize:'0.8rem'}}>Hiện thị</p><p style={{fontSize:'1.2rem',fontWeight:'bold',color:'#f6ad55'}}>{danhSachHienThi.length}/{danhSachGoc.length}</p></div>
               </div>
               <div style={{height:'8px',background:'#e2e8f0',borderRadius:'4px',marginTop:'0.8rem',overflow:'hidden'}}><div style={{height:'100%',width:`${phanTram}%`,background:'linear-gradient(90deg,#48bb78,#38a169)',borderRadius:'4px',transition:'width 0.5s ease'}} /></div>
             </div>
 
+            {/* Nút xuất dữ liệu */}
+            <div style={{display:'flex',gap:'0.5rem',marginBottom:'1rem'}}>
+              <button onClick={xuatDuLieu} style={{flex:1,padding:'0.8rem',background:'white',color:'#4a5568',border:'none',borderRadius:'10px',fontWeight:'bold',cursor:'pointer'}}>📤 Xuất JSON</button>
+              <button onClick={xuatCSV} style={{flex:1,padding:'0.8rem',background:'white',color:'#4a5568',border:'none',borderRadius:'10px',fontWeight:'bold',cursor:'pointer'}}>📊 Xuất CSV/Excel</button>
+            </div>
+
             {/* Danh sách */}
             <div>
-              {!Array.isArray(danhSach)||danhSach.length===0?(
-                <p style={{textAlign:'center',color:'white',fontSize:'1rem'}}>Chưa có gì {boLoc!=='tat-ca'?'trong bộ lọc này':'... Nhấn gợi ý để bắt đầu! 🌟'}</p>
+              {danhSachHienThi.length===0?(
+                <p style={{textAlign:'center',color:'white',fontSize:'1rem'}}>
+                  {tuKhoaTim||boLoc!=='tat-ca'?'Không tìm thấy kết quả nào 🔍':'Chưa có gì... Nhấn gợi ý để bắt đầu! 🌟'}
+                </p>
               ):(
-                danhSach.map(u=>(
+                danhSachHienThi.map(u=>(
                   <div key={u._id} style={{background:'white',borderRadius:'12px',padding:'0.9rem',marginBottom:'0.7rem',opacity:u.hoanThanh?0.7:1,border:dangSua===u._id?'2px solid #667eea':'none'}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                       <div style={{flex:1,cursor:'pointer'}} onClick={()=>batDauSua(u)}>
@@ -409,117 +556,4 @@ function App() {
                           {u.ngayHen?`Đến hạn: ${new Date(u.ngayHen).toLocaleDateString('vi-VN')}`:`Tạo: ${new Date(u.ngayTao).toLocaleDateString('vi-VN')}`}
                         </p>
                       </div>
-                      <div style={{display:'flex',gap:'0.3rem',marginLeft:'0.5rem'}}>
-                        {u.hoanThanh ? (
-                          <button onClick={()=>danhDauHoanThanh(u._id,false)} style={{border:'none',background:'#f6e05e',borderRadius:'50%',width:'32px',height:'32px',cursor:'pointer'}} title="Mở lại">↩</button>
-                        ) : (
-                          <button onClick={()=>danhDauHoanThanh(u._id)} style={{border:'none',background:'#68d391',borderRadius:'50%',width:'32px',height:'32px',cursor:'pointer'}} title="Đánh dấu xong">✓</button>
-                        )}
-                        <button onClick={()=>xoaUocMo(u._id)} style={{border:'none',background:'#fc8181',borderRadius:'50%',width:'32px',height:'32px',cursor:'pointer'}} title="Xóa">🗑️</button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </>
-        )}
-
-        {/* === Tab: Thống kê === */}
-        {tabHienTai === 'thong-ke' && thongKe && (
-          <div style={{background:'white',borderRadius:'16px',padding:'1.5rem'}}>
-            <h2 style={{textAlign:'center',color:'#4a5568',marginTop:0}}>📊 Thống kê chi tiết</h2>
-            
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))',gap:'1rem',margin:'1.5rem 0'}}>
-              {[
-                {so:thongKe.tongSo,label:'Tổng ước mơ',mau:'#667eea'},
-                {so:thongKe.daHoanThanh,label:'Đã hoàn thành',mau:'#48bb78'},
-                {so:thongKe.tongGiaTri.toLocaleString('vi-VN')+' ₫',label:'Tổng giá trị',mau:'#f6ad55'},
-                {so:thongKe.tuanNay,label:'Thêm trong tuần',mau:'#9f7aea'}
-              ].map((s,i)=>(
-                <div key={i} style={{textAlign:'center',padding:'1rem',background:'#f7fafc',borderRadius:'10px'}}>
-                  <p style={{fontSize:'1.5rem',fontWeight:'bold',margin:0,color:s.mau}}>{s.so}</p>
-                  <p style={{margin:'0.3rem 0 0 0',color:'#718096',fontSize:'0.85rem'}}>{s.label}</p>
-                </div>
-              ))}
-            </div>
-
-            <div style={{display:'flex',flexDirection:'column',gap:'0.8rem',marginBottom:'1.5rem'}}>
-              {[
-                {so:thongKe.uuTienCaoChuaXong,label:'Ưu tiên cao chưa xong',mau:'#e53e3e'},
-                {so:thongKe.sapDenHan,label:'Sắp đến hạn',mau:'#f6ad55'}
-              ].map((s,i)=>(
-                <div key={i} style={{padding:'0.9rem',background:s.so>0?'#fff5f5':'#f0fff4',borderRadius:'10px',border:`1px solid ${s.so>0?'#feb2b2':'#9ae6b4'}`}}>
-                  <strong style={{color:s.mau}}>{s.so}</strong> — {s.label}
-                </div>
-              ))}
-            </div>
-
-            <button onClick={xuatDuLieu} style={{width:'100%',padding:'1rem',background:chuDeMau.nen,color:'white',border:'none',borderRadius:'10px',fontWeight:'bold',cursor:'pointer'}}>📤 Tải toàn bộ dữ liệu về máy</button>
-          </div>
-        )}
-
-        {/* === Tab: Lịch sử === */}
-        {tabHienTai === 'lich-su' && (
-          <div style={{background:'white',borderRadius:'16px',padding:'1.5rem'}}>
-            <h2 style={{textAlign:'center',color:'#4a5568',marginTop:0}}>🕐 Lịch sử hoạt động</h2>
-            {lichSu.length === 0 ? (
-              <p style={{textAlign:'center',color:'#718096',padding:'2rem'}}>Chưa có hoạt động nào. Bắt đầu thêm ước mơ nhé! 💫</p>
-            ) : (
-              <div style={{marginTop:'1rem'}}>
-                {lichSu.map((muc,i)=>(
-                  <div key={i} style={{padding:'0.8rem 0',borderBottom:'1px solid #e2e8f0',display:'flex',gap:'0.8rem',alignItems:'flex-start'}}>
-                    <span style={{fontSize:'1.2rem'}}>{muc.icon}</span>
-                    <div style={{flex:1}}>
-                      <p style={{margin:0,color:'#2d3748',fontWeight:'500'}}>{muc.noiDung}</p>
-                      <p style={{margin:'0.2rem 0 0 0',color:'#718096',fontSize:'0.8rem'}}>{muc.hanhDong} — {new Date(muc.thoiGian).toLocaleString('vi-VN')}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* === Tab: Hướng dẫn === */}
-        {tabHienTai === 'huong-dan' && (
-          <div style={{background:'white',borderRadius:'16px',padding:'1.5rem',lineHeight:'1.7'}}>
-            <h2 style={{textAlign:'center',color:'#4a5568',marginTop:0}}>📖 Hướng dẫn sử dụng & Giới thiệu dự án</h2>
-            
-            {[
-              {t:'✨ Tạo ước mơ mới',n:'Điền nội dung, số tiền, chọn ngày hẹn & mức độ ưu tiên → Nhấn "Lưu Lên Đám Mây". Dữ liệu lưu an toàn trên MongoDB ☁️'},
-              {t:'✏️ Chỉnh sửa',n:'Nhấn vào bất kỳ mục nào → tự động điền vào form → sửa xong nhấn "Cập nhật" → thay đổi ngay ✏️'},
-              {t:'💡 Gợi ý thông minh',n:'Ở trang Danh sách sẽ có các gợi ý ngẫu nhiên — nhấn để điền nhanh vào form, chỉnh sửa theo ý mình ✏️'},
-              {t:'🔔 Đồng bộ tự động',n:'Trang tự kiểm tra cập nhật mỗi 30 giây. Nếu mở trên máy khác cũng thấy thay đổi ngay 🔄'},
-              {t:'📊 Xem tiến độ & Lịch sử',n:'Qua tab Thống kê & Lịch sử bạn thấy tổng quan, số liệu, hoạt động gần đây — dễ theo dõi sự phát triển 📈'},
-              {t:'📤 Sao lưu dữ liệu',n:'Nhấn "Tải toàn bộ dữ liệu về máy" để lưu file sao lưu an toàn. Có thể mở bằng trình soạn thảo văn bản bất kỳ 💾'},
-              {t:'🎨 Đổi giao diện',n:'Nhấn 3 vòng tròn màu trên cùng để thay đổi chủ đề. Sẽ được ghi nhớ cho lần sau 🎭'},
-              {t:'🔒 An toàn & Bảo mật',n:'Mật khẩu được mã hóa, dữ liệu riêng tư chỉ bạn xem được. Luôn đăng xuất trên máy không phải của mình 🔐'}
-            ].map((muc,i)=>(
-              <div key={i} style={{marginBottom:'1rem',paddingBottom:'1rem',borderBottom:'1px solid #e2e8f0'}}>
-                <h4 style={{margin:'0 0 0.3rem 0',color:'#4a5568'}}>{muc.t}</h4>
-                <p style={{margin:0,color:'#718096',fontSize:'0.9rem'}}>{muc.n}</p>
-              </div>
-            ))}
-
-            <div style={{marginTop:'1.5rem',padding:'1rem',background:'#f7fafc',borderRadius:'10px'}}>
-              <h3 style={{color:'#4a5568',marginTop:0}}>💻 Công nghệ sử dụng</h3>
-              <ul style={{margin:'0.5rem 0',paddingLeft:'1.2rem',color:'#4a5568'}}>
-                <li><strong>Frontend:</strong> React.js + Vite — nhanh, hiện đại, tối ưu</li>
-                <li><strong>Backend:</strong> Node.js + Express — nhẹ, mạnh, dễ mở rộng</li>
-                <li><strong>Cơ sở dữ liệu:</strong> MongoDB — lưu dữ liệu linh hoạt, an toàn trên đám mây</li>
-                <li><strong>Triển khai:</strong> Vercel (Frontend) + Render (Backend) — miễn phí, ổn định</li>
-                <li><strong>Xác thực:</strong> JWT — bảo mật phiên đăng nhập</li>
-                <li><strong>Quản lý mã nguồn:</strong> Git + GitHub — chuẩn công ty</li>
-              </ul>
-            </div>
-
-            <p style={{textAlign:'center',marginTop:'1.5rem',color:'#4a5568',fontWeight:'bold'}}>💚 Dự án hoàn chỉnh — sẵn sàng đưa vào hồ sơ xin việc! 💫</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-export default App
+                      <div style={{display:'flex',gap:'0.3rem',marginLeft:'0.5rem'}}></div>
