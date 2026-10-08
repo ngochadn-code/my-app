@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 
 // === KẾT NỐI VỚI SERVER ===
-const URL_SERVER = = 'https://so-uoc-mo-server.onrender.com/api/uoc-mo'
+const URL_SERVER = 'https://so-uoc-mo-server.onrender.com/api/uoc-mo'
 
 function App() {
   const [danhSach, setDanhSach] = useState([])
