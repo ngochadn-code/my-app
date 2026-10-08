@@ -38,6 +38,21 @@ function App() {
   const [tabHienTai, setTabHienTai] = useState('danh-sach')
   const [danhSachLoi, setDanhSachLoi] = useState([])
 
+  // ✅ Sửa lỗi hiển thị ngày tháng
+  const dinhDangNgay = (ngay) => {
+    if (!ngay) return '—'
+    const d = new Date(ngay)
+    if (isNaN(d.getTime())) return 'Ngày không xác định'
+    return d.toLocaleString('vi-VN')
+  }
+
+  const dinhDangNgayNgan = (ngay) => {
+    if (!ngay) return '—'
+    const d = new Date(ngay)
+    if (isNaN(d.getTime())) return 'Ngày không xác định'
+    return d.toLocaleDateString('vi-VN')
+  }
+
   useEffect(() => { setDaSanSang(true) }, [])
 
   useEffect(() => {
@@ -64,6 +79,7 @@ function App() {
       ketQua = ketQua.filter(u => {
         if (!u.ngayHen || u.hoanThanh) return false
         const ngay = new Date(u.ngayHen)
+        if (isNaN(ngay.getTime())) return false
         return ngay >= hienTai && ngay <= tuanSau
       })
     }
@@ -521,7 +537,10 @@ function App() {
                         <p style={{margin:'0.3rem 0',color:'#667eea',fontWeight:'bold'}}>{Number(u.mucTien||0).toLocaleString('vi-VN')} ₫</p>
                         <p style={{margin:0,fontSize:'0.75rem',color:'#a0aec0'}}>
                           {u.doUuTien==='cao'&&'⭐ '}
-                          {u.ngayHen?`Đến hạn: ${new Date(u.ngayHen).toLocaleDateString('vi-VN')}`:`Tạo: ${new Date(u.ngayTao).toLocaleDateString('vi-VN')}`}
+                          {u.ngayHen
+                            ? `Đến hạn: ${dinhDangNgayNgan(u.ngayHen)}`
+                            : `Tạo: ${dinhDangNgayNgan(u.ngayTao)}`
+                          }
                         </p>
                       </div>
                       <div style={{display:'flex',gap:'0.3rem',marginLeft:'0.5rem'}}>
@@ -582,7 +601,9 @@ function App() {
               lichSu.map((ls,i)=>(
                 <div key={i} style={{padding:'0.8rem 0',borderBottom:'1px solid #e2e8f0'}}>
                   <p style={{margin:0,color:'#2d3748'}}>{ls.hanhDong}</p>
-                  <p style={{margin:'0.2rem 0 0 0',fontSize:'0.8rem',color:'#a0aec0'}}>{new Date(ls.ngayTao).toLocaleString('vi-VN')}</p>
+                  <p style={{margin:'0.2rem 0 0 0',fontSize:'0.8rem',color:'#a0aec0'}}>
+                    {dinhDangNgay(ls.ngayTao)}
+                  </p>
                 </div>
               ))
             )}
